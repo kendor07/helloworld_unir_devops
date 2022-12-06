@@ -1,50 +1,69 @@
 pipeline {
-    agent any
+    agent none
 
-     stages {
+    stages {
         stage('Get Code') {
+            agent{ label 'linux-agent-1' }
             steps {
-                // Obtener código del repo
-                //git 'https://github.com/anieto-unir/helloworld.git'
-				script {
-					scmVars = checkout scm
-					echo 'scm : the commit id is ' + scmVars.GIT_COMMIT
-				}
+                //obtener el codigo del repo
+                git 'https://github.com/kendor07/helloworld_unir_devops.git'
+                sh 'ls'
+                sh 'hostname'
             }
         }
-        
         stage('Build') {
+            agent{ label 'linux-agent-1' }
             steps {
-                echo 'Eyyy, esto es Python. No hay que compilar nada!!!'
-				echo 'El workspace contiene el commit \'' + scmVars.GIT_COMMIT + '\' de la rama \'' + scmVars.GIT_BRANCH + '\''
+                echo 'Python code, it does not need compilation'
+                echo WORKSPACE
             }
         }
-        
-        stage('Tests') {
-            parallel {
+        stage('Test') {
+            parallel{
                 stage('Unit') {
+                    agent{ label 'linux-agent-1' }
                     steps {
-                        bat '''
-                            set PYTHONPATH=C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\Python
-                            pytest --junitxml=result-unit.xml test\\unit
-                        '''
+                        catchError(buildResult:'UNSTABLE',stageResult:'FAILURE'){
+                            sh '''
+                                hostname
+                                pwd
+                                ls
+                                export PYTHONPATH=.
+                                pytest --junitxml=result-unit.xml test/unit
+                            '''
+                        }
                     }
                 }
-                stage('Service') {
+                stage('Rest') {
+                    agent{ label 'linux-agent-1' }
                     steps {
-                        bat '''
-                            set FLASK_APP=app\\api.py
-                            set FLASK_ENV=development
-                            start flask run
-                            start java -jar C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar --port 9090 --root-dir C:\\Unir\\Ejercicios\\wiremock
-                            set PYTHONPATH=C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\Python
-                            pytest --junitxml=result-rest.xml test\\rest
-                        '''
-                    }    
+                        catchError(buildResult:'UNSTABLE',stageResult:'FAILURE'){
+                            sh 'hostname'
+                            sh 'pwd'
+                            sh 'ls'
+                            sh ' cp -R ../test3/app/ .'
+                            sh ' cp -R ../test3/test/ .'
+                            sh 'export FLASK_APP=app/api.py'
+                            sh 'flask run --host=0.0.0.0 &'
+                            sh 'wget https://repo1.maven.org/maven2/com/github/tomakehurst/wiremock-jre8-standalone/2.35.0/wiremock-jre8-standalone-2.35.0.jar'
+                            sh 'java -jar wiremock-jre8-standalone-2.35.0.jar  --port 9090 --root-dir test/wiremock/ &'
+                            sh 'pytest --junitxml=result-rest.xml test/rest'
+                        }
+                    }
                 }
             }
         }
-        stage ('Results') {
+        stage('deploy') {
+            agent{ label 'linux-agent-3' }
+            steps {
+                sh 'hostname'
+                sh 'pwd'
+                sh 'ls'
+                sh 'echo I am being run in agent 2'
+            }
+        }
+        stage('Result') {
+            agent{ label 'linux-agent-1' }
             steps {
                 junit 'result*.xml'
             }
